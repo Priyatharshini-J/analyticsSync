@@ -4,6 +4,6 @@
 	"main": "index.js",
 	"author": "solutions@zohocatalyst.com",
 	"dependencies": {
-		"zcatalyst-sdk-node": "latest"
+		"zcatalyst-sdk-node": "1.17.3"
 	}
 }
