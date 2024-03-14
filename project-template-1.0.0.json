@@ -1,0 +1,77 @@
+{
+  "name" : "project-template",
+  "version" : "1.0.0",
+  "parameters" : { },
+  "components" : {
+    "Functions" : [ {
+      "type" : "function",
+      "name" : "zoho_analytics_datastore_sync_record_handler",
+      "properties" : {
+        "stack" : "node16",
+        "code" : {
+          "path" : "functions/zoho_analytics_datastore_sync_record_handler.zip"
+        },
+        "configuration" : {
+          "environment" : { },
+          "memory" : 256
+        },
+        "type" : "event",
+        "name" : "zoho_analytics_datastore_sync_record_handler"
+      },
+      "dependsOn" : [ ]
+    }, {
+      "type" : "function",
+      "name" : "zoho_analytics_datastore_sync_routes_handler",
+      "properties" : {
+        "stack" : "node16",
+        "code" : {
+          "path" : "functions/zoho_analytics_datastore_sync_routes_handler.zip"
+        },
+        "configuration" : {
+          "environment" : { },
+          "memory" : 256
+        },
+        "type" : "applogic",
+        "name" : "zoho_analytics_datastore_sync_routes_handler"
+      },
+      "dependsOn" : [ ]
+    } ],
+    "Filestore" : [ {
+      "type" : "folder",
+      "name" : "AnalyticsImport",
+      "properties" : {
+        "audit_consent" : false,
+        "folder_name" : "AnalyticsImport"
+      },
+      "dependsOn" : [ ]
+    }, {
+      "type" : "folderPermission",
+      "name" : "AnalyticsImport-App Administrator",
+      "properties" : {
+        "role_name" : "App Administrator",
+        "folder_name" : "AnalyticsImport",
+        "type" : "App Administrator",
+        "folder_permissions" : [ "DOWNLOAD", "UPLOAD", "DELETE" ]
+      },
+      "dependsOn" : [ "Filestore.folder.AnalyticsImport" ]
+    }, {
+      "type" : "folderPermission",
+      "name" : "AnalyticsImport-App User",
+      "properties" : {
+        "role_name" : "App User",
+        "folder_name" : "AnalyticsImport",
+        "type" : "App User",
+        "folder_permissions" : [ "DOWNLOAD" ]
+      },
+      "dependsOn" : [ "Filestore.folder.AnalyticsImport" ]
+    } ],
+    "Cache" : [ {
+      "type" : "segment",
+      "name" : "ZohoAnalyticsDatastoreSync",
+      "properties" : {
+        "segment_name" : "ZohoAnalyticsDatastoreSync"
+      },
+      "dependsOn" : [ ]
+    } ]
+  }
+}
