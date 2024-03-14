@@ -1,0 +1,12 @@
+.build
+.catalystrc
+.DS_Store
+
+
+**/node_modules
+**/package-lock.json
+**/catalyst-debug.log
+
+node_modules
+catalyst.json
+package.json
