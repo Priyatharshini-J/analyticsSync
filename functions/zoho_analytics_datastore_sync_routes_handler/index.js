@@ -35,7 +35,7 @@ app.use((req, res, next) => {
 app.post('/import', async (req, res) => {
   try {
     const catalystApp = catalyst.initialize(req)
-    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/datastore_analytics_sync_handler/export-datastore'
+    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/zoho_analytics_datastore_sync_routes_handler/export-datastore'
     const tableName = req.body.tableName
     const workspaceId = req.body.workspaceId
     let viewId = req.body.viewId
@@ -118,7 +118,7 @@ app.post('/export-datastore', async (req, res) => {
     if (queries[page]) {
       message = await Helpers.createJob(catalystApp, queries[page])
     } else {
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
       const environment = req.headers['x-zc-environment']
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[0], orgId, workspaceId, viewId, callbackUrl)
     }
@@ -150,7 +150,7 @@ app.post('/import-analytics', async (req, res) => {
 
     if (queries[page]) {
       const environment = req.headers['x-zc-environment']
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[page], orgId, workspaceId, viewId, callbackUrl)
     } else {
       await segment.delete(`${AppConstants.JobName}_${tableName}`)
