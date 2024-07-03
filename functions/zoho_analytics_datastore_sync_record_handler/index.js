@@ -32,16 +32,25 @@ module.exports = async (event, context) => {
       } else if (action === 'Update') {
         for (let i = 0; i < data.length; i++) {
           const element = isJsonObject(data[i][tableName]) ? data[i][tableName] : data[i]
-          await viewInstance.updateRow(element, 'ROWID = ' + element.ROWID)
+          const result = await viewInstance.updateRow(element, 'ROWID = ' + element.ROWID)
+          if (result.updatedRows == 0) {
+            console.log("Updating ROWID = '" + element.ROWID + "' failed.")
+          }
         }
       } else {
         if (Array.isArray(data)) {
           for (let i = 0; i < data.length; i++) {
             const element = isJsonObject(data[i][tableName]) ? data[i][tableName] : data[i]
-            await viewInstance.deleteRow('ROWID = ' + element.ROWID)
+            const result = await viewInstance.deleteRow('ROWID = ' + element.ROWID)
+            if (result == 0) {
+              console.log("Deleting ROWID = '" + element.ROWID + "' failed because it is not present in Analytics.")
+            }
           }
         } else {
-          await viewInstance.deleteRow('ROWID = ' + data.ROWID)
+          const result = await viewInstance.deleteRow('ROWID = ' + data.ROWID)
+          if (result == 0) {
+            console.log("Deleting ROWID = '" + element.ROWID + "' failed because it is not present in Analytics.")
+          }
         }
       }
     }

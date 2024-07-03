@@ -34,8 +34,9 @@ app.use((req, res, next) => {
 
 app.post('/import', async (req, res) => {
   try {
+    const analyticsInstance = AnalyticsService.getInstance()
     const catalystApp = catalyst.initialize(req)
-    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/zoho_analytics_datastore_sync_routes_handler/export-datastore'
+    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/datastore_analytics_sync_handler/export-datastore'
     const tableName = req.body.tableName
     const workspaceId = req.body.workspaceId
     let viewId = req.body.viewId
@@ -46,6 +47,11 @@ app.post('/import', async (req, res) => {
       throw new AppError(400, "'orgId' cannot be empty.")
     } else if (!workspaceId) {
       throw new AppError(400, "'workspaceId' cannot be empty.")
+    } else if (orgId) {
+      const orgExists = (await analyticsInstance.getOrgs()).some(org => org.orgId === orgId);
+      if (!orgExists) {
+        throw new AppError(404, `Organization id ${orgId} does not exist.`);
+      }
     }
     const cache = catalystApp.cache()
     const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
@@ -56,7 +62,7 @@ app.post('/import', async (req, res) => {
     if (isTableSyncing) {
       throw new AppError(400, 'The given table is already in the progress of moving data to Analytics.')
     }
-    const analyticsInstance = AnalyticsService.getInstance()
+
     const table = catalystApp.datastore().table(tableName)
     const columns = await table.getAllColumns()
       .then(columns => columns.filter(column => !AppConstants.OmittedColumn.includes(column.column_name)))
@@ -72,7 +78,8 @@ app.post('/import', async (req, res) => {
       viewId = await workspaceInstance.createTable({ TABLENAME: tableName, COLUMNS: columns })
     }
     const queries = []
-    const count = await catalystApp.zcql().executeZCQLQuery('SELECT COUNT(ROWID) FROM ' + tableName).then((value) => value[0][tableName].ROWID)
+    const countJSON = await catalystApp.zcql().executeZCQLQuery('SELECT COUNT(ROWID) FROM ' + tableName)
+    const count = countJSON[0][tableName]["COUNT(ROWID)"];
     const totalPages = Math.ceil(count / AppConstants.MaxRecords)
     for (let j = 1; j <= totalPages; j++) {
       const query = {
@@ -90,9 +97,10 @@ app.post('/import', async (req, res) => {
     console.log(message)
     res.status(200).send({
       status: 'success',
-      message: 'Successfully initiated bulk import to Analytics, and it will be reflected in  sometime.  Check the logs for more details.'
+      message: 'Successfully initiated bulk import to Analytics, and it will be reflected in sometime. Check the logs for more details.'
     })
   } catch (err) {
+    await segment.delete(`${AppConstants.JobName}_${tableName}`)
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(err)
     res.status(statusCode).send(others)
   }
@@ -118,7 +126,7 @@ app.post('/export-datastore', async (req, res) => {
     if (queries[page]) {
       message = await Helpers.createJob(catalystApp, queries[page])
     } else {
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
       const environment = req.headers['x-zc-environment']
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[0], orgId, workspaceId, viewId, callbackUrl)
     }
@@ -128,6 +136,7 @@ app.post('/export-datastore', async (req, res) => {
       message
     })
   } catch (error) {
+    await segment.delete(`${AppConstants.JobName}_${tableName}`)
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(error)
     res.status(statusCode).send(others)
   }
@@ -150,7 +159,7 @@ app.post('/import-analytics', async (req, res) => {
 
     if (queries[page]) {
       const environment = req.headers['x-zc-environment']
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[page], orgId, workspaceId, viewId, callbackUrl)
     } else {
       await segment.delete(`${AppConstants.JobName}_${tableName}`)
@@ -162,6 +171,7 @@ app.post('/import-analytics', async (req, res) => {
       message
     })
   } catch (error) {
+    await segment.delete(`${AppConstants.JobName}_${tableName}`)
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(error)
     res.status(statusCode).send(others)
   }
@@ -188,12 +198,18 @@ app.post('/row', async (req, res) => {
     } else if (!workspaceId) {
       throw new AppError(400, "'workspaceId' cannot be empty.")
     } else if (!viewId) {
-      throw new AppError(400, "'viewID' cannot be empty.")
+      throw new AppError(400, "'viewId' cannot be empty.")
     }
     const analyticsInstance = AnalyticsService.getInstance()
     const viewInstance = analyticsInstance.getViewInstance(orgId, workspaceId, viewId)
     const catalystApp = catalyst.initialize(req)
     const data = await catalystApp.datastore().table(tableName).getRow(rowId)
+    if (data == null) {
+      res.status(400).send({
+        status: 'failure',
+        message: 'Row not found! Please check whether the given rowId is valid.'
+      })
+    }
     let message = ''
     if (action.toLowerCase() === 'insert') {
       await viewInstance.addRow(data)
