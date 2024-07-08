@@ -33,11 +33,13 @@ app.use((req, res, next) => {
 })
 
 app.post('/import', async (req, res) => {
+  const catalystApp = catalyst.initialize(req)
+  const tableName = req.body.tableName
+  const cache = catalystApp.cache()
+  const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
   try {
     const analyticsInstance = AnalyticsService.getInstance()
-    const catalystApp = catalyst.initialize(req)
     const callbackUrl = req.headers['x-zc-project-domain'] + '/server/datastore_analytics_sync_handler/export-datastore'
-    const tableName = req.body.tableName
     const workspaceId = req.body.workspaceId
     let viewId = req.body.viewId
     const orgId = req.body.orgId
@@ -53,8 +55,6 @@ app.post('/import', async (req, res) => {
         throw new AppError(404, `Organization id ${orgId} does not exist.`);
       }
     }
-    const cache = catalystApp.cache()
-    const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
     const isTableSyncing = await segment
       .getValue(`${AppConstants.JobName}_${tableName}`)
       .then((value) => Boolean(value))
@@ -93,30 +93,32 @@ app.post('/import', async (req, res) => {
     }
     const json = { orgId, workspaceId, viewId, queries }
     await segment.put(`${AppConstants.JobName}_${tableName}`, json)
-    const message = await Helpers.createJob(catalystApp, queries[0])
-    console.log(message)
+    await Helpers.createJob(catalystApp, queries[0])
     res.status(200).send({
       status: 'success',
       message: 'Successfully initiated bulk import to Analytics, and it will be reflected in sometime. Check the logs for more details.'
     })
   } catch (err) {
-    await segment.delete(`${AppConstants.JobName}_${tableName}`)
+    const isTablePresent = await segment
+      .getValue(`${AppConstants.JobName}_${tableName}`)
+      .then((value) => Boolean(value))
+    isTablePresent ? await segment.delete(`${AppConstants.JobName}_${tableName}`) : null
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(err)
     res.status(statusCode).send(others)
   }
 })
 
 app.post('/export-datastore', async (req, res) => {
+  const catalystApp = catalyst.initialize(req)
+  const tableName = req.body.tableName
+  const cache = catalystApp.cache()
+  const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
   try {
     const body = req.body
     if (!body.status.includes('Completed')) {
       throw new Error(JSON.stringify(body.results.description))
     }
-    const catalystApp = catalyst.initialize(req)
-    const cache = catalystApp.cache()
-    const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
     const page = parseInt(body.query[0].details.page)
-    const tableName = body.tableName
     let message = ''
     const { queries, viewId, workspaceId, orgId } = await segment.getValue(`${AppConstants.JobName}_${tableName}`).then((value) => JSON.parse(value))
 
@@ -136,24 +138,26 @@ app.post('/export-datastore', async (req, res) => {
       message
     })
   } catch (error) {
-    await segment.delete(`${AppConstants.JobName}_${tableName}`)
+    const isTablePresent = await segment
+      .getValue(`${AppConstants.JobName}_${tableName}`)
+      .then((value) => Boolean(value))
+    isTablePresent ? await segment.delete(`${AppConstants.JobName}_${tableName}`) : null
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(error)
     res.status(statusCode).send(others)
   }
 })
 
 app.post('/import-analytics', async (req, res) => {
+  const catalystApp = catalyst.initialize(req)
+  const tableName = req.body.tableName
+  const cache = catalystApp.cache()
+  const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
   try {
     const body = req.body
-    const tableName = req.query.tableName
     const page = req.query.page
     if (!body.jobStatus.includes('COMPLETED')) {
       throw new Error(JSON.stringify(body.jobInfo))
     }
-
-    const catalystApp = catalyst.initialize(req)
-    const cache = catalystApp.cache()
-    const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
     const { queries, viewId, workspaceId, orgId } = await segment.getValue(`${AppConstants.JobName}_${tableName}`).then((value) => JSON.parse(value))
     let message = ''
 
@@ -171,7 +175,10 @@ app.post('/import-analytics', async (req, res) => {
       message
     })
   } catch (error) {
-    await segment.delete(`${AppConstants.JobName}_${tableName}`)
+    const isTablePresent = await segment
+      .getValue(`${AppConstants.JobName}_${tableName}`)
+      .then((value) => Boolean(value))
+    isTablePresent ? await segment.delete(`${AppConstants.JobName}_${tableName}`) : null
     const { statusCode, ...others } = ErrorHandler.getInstance().processError(error)
     res.status(statusCode).send(others)
   }
