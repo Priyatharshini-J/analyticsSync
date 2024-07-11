@@ -49,7 +49,7 @@ module.exports = async (event, context) => {
         } else {
           const result = await viewInstance.deleteRow('ROWID = ' + data.ROWID)
           if (result == 0) {
-            console.log("Deleting ROWID = '" + element.ROWID + "' failed because it is not present in Analytics.")
+            console.log("Deleting ROWID = '" + data.ROWID + "' failed because it is not present in Analytics.")
           }
         }
       }

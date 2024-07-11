@@ -39,7 +39,7 @@ app.post('/import', async (req, res) => {
   const segment = await cache.getSegmentDetails(AppConstants.CatalystComponents.Segment.Analytics)
   try {
     const analyticsInstance = AnalyticsService.getInstance()
-    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/datastore_analytics_sync_handler/export-datastore'
+    const callbackUrl = req.headers['x-zc-project-domain'] + '/server/zoho_analytics_datastore_sync_routes_handler/export-datastore'
     const workspaceId = req.body.workspaceId
     let viewId = req.body.viewId
     const orgId = req.body.orgId
@@ -63,6 +63,13 @@ app.post('/import', async (req, res) => {
       throw new AppError(400, 'The given table is already in the progress of moving data to Analytics.')
     }
 
+    const allTables = await catalystApp.datastore().getAllTables()
+    const allTablesJSON = JSON.parse(JSON.stringify(allTables));
+    const isTableNamePresent = allTablesJSON.some(item => item.table_name.trim() === tableName);
+    if (isTableNamePresent === false) {
+      throw new AppError(404, 'No such Table with the given name exists')
+    }
+
     const table = catalystApp.datastore().table(tableName)
     const columns = await table.getAllColumns()
       .then(columns => columns.filter(column => !AppConstants.OmittedColumn.includes(column.column_name)))
@@ -79,7 +86,7 @@ app.post('/import', async (req, res) => {
     }
     const queries = []
     const countJSON = await catalystApp.zcql().executeZCQLQuery('SELECT COUNT(ROWID) FROM ' + tableName)
-    const count = countJSON[0][tableName]["COUNT(ROWID)"];
+    const count = countJSON[0][tableName]['COUNT(ROWID)'];
     const totalPages = Math.ceil(count / AppConstants.MaxRecords)
     for (let j = 1; j <= totalPages; j++) {
       const query = {
@@ -128,7 +135,7 @@ app.post('/export-datastore', async (req, res) => {
     if (queries[page]) {
       message = await Helpers.createJob(catalystApp, queries[page])
     } else {
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[0].page}`
       const environment = req.headers['x-zc-environment']
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[0], orgId, workspaceId, viewId, callbackUrl)
     }
@@ -163,7 +170,7 @@ app.post('/import-analytics', async (req, res) => {
 
     if (queries[page]) {
       const environment = req.headers['x-zc-environment']
-      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/datastore_analytics_sync_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
+      const callbackUrl = `${req.headers['x-zc-project-domain']}/server/zoho_analytics_datastore_sync_routes_handler/import-analytics?tableName=${tableName}&catalyst-codelib-secret-key=${process.env[AppConstants.Env.CodelibSecretKey]}&page=${queries[page].page}`
       message = await Helpers.importBulkData(environment, catalystApp, tableName, queries[page], orgId, workspaceId, viewId, callbackUrl)
     } else {
       await segment.delete(`${AppConstants.JobName}_${tableName}`)
@@ -219,11 +226,18 @@ app.post('/row', async (req, res) => {
     }
     let message = ''
     if (action.toLowerCase() === 'insert') {
-      await viewInstance.addRow(data)
+      await viewInstance.addRow(data);
       message = 'The specific row got successfully created in Analytics.'
     } else {
-      await viewInstance.updateRow(data, 'ROWID = ' + rowId)
-      message = 'The specific row got successfully updated in Analytics.'
+      const update = await viewInstance.updateRow(data, 'ROWID = ' + rowId)
+      if (update.updatedRows == 0) {
+        return res.status(404).send({
+          status: 'failure',
+          message: 'Cannot find the row in Analytics.'
+        })
+      } else {
+        message = 'The specific row got successfully updated in Analytics.'
+      }
     }
     res.status(200).send({
       status: 'success',
