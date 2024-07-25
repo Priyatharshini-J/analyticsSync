@@ -214,6 +214,15 @@ app.post('/row', async (req, res) => {
     } else if (!viewId) {
       throw new AppError(400, "'viewId' cannot be empty.")
     }
+
+    const allTables = await catalystApp.datastore().getAllTables()
+    const allTablesJSON = JSON.parse(JSON.stringify(allTables));
+    const isTableNamePresent = allTablesJSON.some(item => item.table_name.trim() === tableName);
+    if (isTableNamePresent === false) {
+      throw new AppError(404, 'No such Table with the given name exists')
+    }
+
+
     const analyticsInstance = AnalyticsService.getInstance()
     const viewInstance = analyticsInstance.getViewInstance(orgId, workspaceId, viewId)
     const catalystApp = catalyst.initialize(req)
